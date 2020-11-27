@@ -1,15 +1,41 @@
-import {Err, GlobalErrorHandlerMiddleware, OverrideProvider, Req, Res} from "@tsed/common";
+import {Catch, ExceptionFilterMethods, PlatformContext, ResponseErrorObject} from "@tsed/common";
 
-@OverrideProvider(GlobalErrorHandlerMiddleware)
-export class CustomerGEHMiddleware extends GlobalErrorHandlerMiddleware {
+@Catch(Error)
+export class CustomerGEHMiddleware implements ExceptionFilterMethods {
 
-  use(@Err() error: any,
-      @Req() request: Req,
-      @Res() response: Res): any {
-
+  catch(exception: any, ctx: PlatformContext): any {
+    const {response} = ctx;
     // DO SOMETHING
     console.error("==============================");
 
-    return super.use(error, request, response);
+    const error = this.mapError(exception);
+    const headers = this.getHeaders(exception);
+
+    return (response as any).headers(headers).status(500).body(error);
   }
+
+  mapError(error: any) {
+    return {
+      name: error.origin?.name || error.name,
+      message: error.message,
+      status: error.status || 500,
+      errors: this.getErrors(error),
+    };
+  }
+
+  protected getErrors(error: any) {
+    return [error, error.origin].filter(Boolean).reduce((errs, {errors}: ResponseErrorObject) => {
+      return [...errs, ...(errors || [])];
+    }, []);
+  }
+
+  protected getHeaders(error: any) {
+    return [error, error.origin].filter(Boolean).reduce((obj, {headers}: ResponseErrorObject) => {
+      return {
+        ...obj,
+        ...(headers || {}),
+      };
+    }, {});
+  }
+
 }
